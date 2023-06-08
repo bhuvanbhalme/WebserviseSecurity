@@ -1,0 +1,57 @@
+package com.cglia.student.filter;
+import java.io.IOException;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.cglia.student.config.UserInfoUserDetailsService;
+import com.cglia.student.util.JwtUtil;
+
+@Component
+public class JwtFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtUtil jwtUtil;
+    @Autowired
+    private UserInfoUserDetailsService service;
+
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, FilterChain filterChain) throws ServletException, IOException {
+
+        String authorizationHeader = httpServletRequest.getHeader("Authorization");
+       //Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhcnVuIiwiaWF0IjoxNjg2MTE1MjM2LCJleHAiOjE2ODYxNTEyMzZ9.cKlf-nhJ1-pQQ0ytTvBAp2qCQa2s76NtbICv9wp6Tls
+        String token = null;
+        String userName = null;
+
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            token = authorizationHeader.substring(7);
+            userName = jwtUtil.extractUsername(token);
+        }
+
+        if (userName != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+            UserDetails userDetails = service.loadUserByUsername(userName);
+
+            if (jwtUtil.validateToken(token, userDetails)) {
+
+                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                usernamePasswordAuthenticationToken
+                        .setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
+                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+            }
+        }
+        filterChain.doFilter(httpServletRequest, httpServletResponse);
+    }
+}
